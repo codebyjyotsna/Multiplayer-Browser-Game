@@ -10,10 +10,39 @@
       margin: 0 auto;
       background: #f0f0f0;
     }
+    #leaderboard {
+      max-width: 800px;
+      margin: 10px auto;
+      text-align: center;
+    }
+    #leaderboard table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #leaderboard th, #leaderboard td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+    #leaderboard th {
+      background-color: #4CAF50;
+      color: white;
+    }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboardBody"></tbody>
+    </table>
+  </div>
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const canvas = document.getElementById('gameCanvas');
@@ -22,25 +51,46 @@
     const socket = io();
 
     const players = {};
+    const localPlayer = { x: 400, y: 300 };
 
     // Draw Players
     function drawPlayers() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const id in players) {
         const player = players[id];
-        ctx.fillStyle = 'blue';
+        ctx.fillStyle = id === socket.id ? 'green' : 'blue';
         ctx.fillRect(player.x, player.y, 20, 20);
       }
     }
 
-    // Update local player
-    const localPlayer = { x: 400, y: 300 };
+    // Update Leaderboard
+    function updateLeaderboard() {
+      const leaderboardBody = document.getElementById('leaderboardBody');
+      leaderboardBody.innerHTML = '';
+
+      const sortedPlayers = Object.entries(players).sort((a, b) => b[1].score - a[1].score);
+
+      sortedPlayers.forEach(([id, player]) => {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = id === socket.id ? 'You' : `Player ${id.slice(0, 5)}`;
+        const scoreCell = document.createElement('td');
+        scoreCell.textContent = player.score;
+        row.appendChild(nameCell);
+        row.appendChild(scoreCell);
+        leaderboardBody.appendChild(row);
+      });
+    }
+
+    // Handle keyboard input for movement
     document.addEventListener('keydown', (event) => {
       const speed = 5;
       if (event.key === 'ArrowUp') localPlayer.y -= speed;
       if (event.key === 'ArrowDown') localPlayer.y += speed;
       if (event.key === 'ArrowLeft') localPlayer.x -= speed;
       if (event.key === 'ArrowRight') localPlayer.x += speed;
+
+      // Send updated position to the server
       socket.emit('move', localPlayer);
     });
 
@@ -48,11 +98,13 @@
     socket.on('currentPlayers', (serverPlayers) => {
       Object.assign(players, serverPlayers);
       drawPlayers();
+      updateLeaderboard();
     });
 
     socket.on('newPlayer', (player) => {
       players[player.id] = player;
       drawPlayers();
+      updateLeaderboard();
     });
 
     socket.on('playerMoved', (player) => {
@@ -60,9 +112,16 @@
       drawPlayers();
     });
 
+    socket.on('updateScores', (data) => {
+      players[data.id1].score = data.score1;
+      players[data.id2].score = data.score2;
+      updateLeaderboard();
+    });
+
     socket.on('playerDisconnected', (id) => {
       delete players[id];
       drawPlayers();
+      updateLeaderboard();
     });
   </script>
 </body>
