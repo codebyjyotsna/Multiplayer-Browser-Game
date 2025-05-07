@@ -7,6 +7,19 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const players = {};
+const gameWidth = 800;
+const gameHeight = 600;
+
+// Helper function to detect collision
+function isColliding(player1, player2) {
+  const size = 20; // Assumes players are 20x20 squares
+  return (
+    player1.x < player2.x + size &&
+    player1.x + size > player2.x &&
+    player1.y < player2.y + size &&
+    player1.y + size > player2.y
+  );
+}
 
 app.use(express.static('public'));
 
@@ -14,7 +27,7 @@ io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
   // Add new player
-  players[socket.id] = { x: 0, y: 0 };
+  players[socket.id] = { x: Math.random() * gameWidth, y: Math.random() * gameHeight, score: 0 };
 
   // Send current players to the new player
   socket.emit('currentPlayers', players);
@@ -25,8 +38,23 @@ io.on('connection', (socket) => {
   // Handle player movement
   socket.on('move', (data) => {
     if (players[socket.id]) {
-      players[socket.id] = data;
-      io.emit('playerMoved', { id: socket.id, ...data });
+      players[socket.id].x = data.x;
+      players[socket.id].y = data.y;
+
+      // Check for collisions with other players
+      for (const id in players) {
+        if (id !== socket.id && isColliding(players[socket.id], players[id])) {
+          // Award points for collisions
+          players[socket.id].score += 1;
+          players[id].score -= 1;
+
+          // Broadcast updated scores
+          io.emit('updateScores', { id1: socket.id, score1: players[socket.id].score, id2: id, score2: players[id].score });
+        }
+      }
+
+      // Broadcast player movement
+      io.emit('playerMoved', { id: socket.id, x: data.x, y: data.y });
     }
   });
 
