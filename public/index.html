@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiplayer Game</title>
+  <style>
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const socket = io();
+
+    const players = {};
+
+    // Draw Players
+    function drawPlayers() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const id in players) {
+        const player = players[id];
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(player.x, player.y, 20, 20);
+      }
+    }
+
+    // Update local player
+    const localPlayer = { x: 400, y: 300 };
+    document.addEventListener('keydown', (event) => {
+      const speed = 5;
+      if (event.key === 'ArrowUp') localPlayer.y -= speed;
+      if (event.key === 'ArrowDown') localPlayer.y += speed;
+      if (event.key === 'ArrowLeft') localPlayer.x -= speed;
+      if (event.key === 'ArrowRight') localPlayer.x += speed;
+      socket.emit('move', localPlayer);
+    });
+
+    // Handle server events
+    socket.on('currentPlayers', (serverPlayers) => {
+      Object.assign(players, serverPlayers);
+      drawPlayers();
+    });
+
+    socket.on('newPlayer', (player) => {
+      players[player.id] = player;
+      drawPlayers();
+    });
+
+    socket.on('playerMoved', (player) => {
+      players[player.id] = player;
+      drawPlayers();
+    });
+
+    socket.on('playerDisconnected', (id) => {
+      delete players[id];
+      drawPlayers();
+    });
+  </script>
+</body>
+</html>
